@@ -47,10 +47,10 @@ make openmp
 make mpi
 make cuda
 ```
-`run` Bash script contains all the necessary information to run the project.
+To run the project use the following commands
 ```bash
-./run seq # Run the sequential executable
-./run omp # Run the openmp executable
+make run-seq # Run the sequential executable
+make run-omp # Run the openmp executable
 
 # NOTE - For CUDA, MPI methods still not implemeted yet
 ```

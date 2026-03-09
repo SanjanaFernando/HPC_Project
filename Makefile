@@ -80,3 +80,19 @@ $(OMP_OBJ): $(OMP_SRC)
 clean:
 	rm -f $(OBJDIR)/*.o
 	rm -f $(EXEDIR)/*
+
+########################################################################
+######################## Run Commands ##################################
+########################################################################
+
+.PHONY: run-seq run-omp
+
+# Run sequential executable
+run-seq: sequential
+	@echo "Running sequential executable..."
+	@./$(SEQ_TARGET)
+
+# Run OpenMP executable
+run-omp: openmp
+	@echo "Running OpenMP executable..."
+	@./$(OMP_TARGET)
