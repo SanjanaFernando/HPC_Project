@@ -19,7 +19,7 @@ Linux / WSL:
 
 ```bash
 gcc -O2 -o nbody_seq nbody_sequential.c -lm
-gcc -O2 -fopenmp -o nbody_omp nbody_openmp.c -lm
+gcc -O3 -march=native -fopenmp -o nbody_omp nbody_openmp.c -lm
 ```
 
 Windows (PowerShell with MinGW):
@@ -42,6 +42,10 @@ Linux / WSL:
 # OpenMP (set threads, e.g. 4)
 export OMP_NUM_THREADS=4
 ./nbody_omp
+
+Notes for best performance
+- Compile with `-O3 -march=native` and enable OpenMP: `-fopenmp`.
+- Optionally enable fast-math with `-ffast-math` for extra speed (may change numerics).
 ```
 
 PowerShell (Windows):

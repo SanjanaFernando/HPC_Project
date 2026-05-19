@@ -68,36 +68,45 @@ void generateParticles(Particle *particles, int n, unsigned int seed) {
     }
 }
 
-void bodyForce(Particle *particles, float dt, int n) {
+// Optimized body force using Structure-of-Arrays (SoA) layout and SIMD
+void bodyForceSoA(float *x, float *y, float *z, float *mass,
+                  float *vx, float *vy, float *vz, float dt, int n) {
     #pragma omp parallel for schedule(static)
     for (int i = 0; i < n; i++) {
+        float xi = x[i];
+        float yi = y[i];
+        float zi = z[i];
+
         float Fx = 0.0f;
         float Fy = 0.0f;
         float Fz = 0.0f;
 
+        // Vectorize inner accumulation across j
+        #pragma omp simd reduction(+:Fx,Fy,Fz)
         for (int j = 0; j < n; j++) {
-            float dx = particles[j].x - particles[i].x;
-            float dy = particles[j].y - particles[i].y;
-            float dz = particles[j].z - particles[i].z;
+            float dx = x[j] - xi;
+            float dy = y[j] - yi;
+            float dz = z[j] - zi;
 
             float distSqr = dx*dx + dy*dy + dz*dz + SOFTENING;
             float invDist  = 1.0f / sqrtf(distSqr);
             float invDist3 = invDist * invDist * invDist;
 
-            float f = G * particles[j].mass * invDist3;
+            float f = G * mass[j] * invDist3;
 
             Fx += dx * f;
             Fy += dy * f;
             Fz += dz * f;
         }
 
-        particles[i].vx += Fx * dt;
-        particles[i].vy += Fy * dt;
-        particles[i].vz += Fz * dt;
+        vx[i] += Fx * dt;
+        vy[i] += Fy * dt;
+        vz[i] += Fz * dt;
     }
 }
 
 int main() {
+    // Allocate Particle array for loading/generation then convert to SoA
     Particle *particles = (Particle *) malloc(N * sizeof(Particle));
     if (!particles) {
         fprintf(stderr, "Memory allocation failed for particles!\n");
@@ -111,13 +120,36 @@ int main() {
         }
     }
 
-    // Optional: save initial state
+    // Allocate SoA arrays
+    float *mass = (float*) malloc(sizeof(float) * N);
+    float *x    = (float*) malloc(sizeof(float) * N);
+    float *y    = (float*) malloc(sizeof(float) * N);
+    float *z    = (float*) malloc(sizeof(float) * N);
+    float *vx   = (float*) malloc(sizeof(float) * N);
+    float *vy   = (float*) malloc(sizeof(float) * N);
+    float *vz   = (float*) malloc(sizeof(float) * N);
+    if (!mass || !x || !y || !z || !vx || !vy || !vz) {
+        fprintf(stderr, "Memory allocation failed for SoA arrays!\n");
+        return 1;
+    }
+
+    // Convert AoS -> SoA for better memory access patterns
+    for (int i = 0; i < N; i++) {
+        mass[i] = particles[i].mass;
+        x[i]    = particles[i].x;
+        y[i]    = particles[i].y;
+        z[i]    = particles[i].z;
+        vx[i]   = particles[i].vx;
+        vy[i]   = particles[i].vy;
+        vz[i]   = particles[i].vz;
+    }
+
+    // Optional: save initial state (SoA) for reference
     FILE *fp = fopen("inputs/initial_particles_openmp.txt", "w");
     if (fp) {
         for (int i = 0; i < N; i++) {
             fprintf(fp, "%.6f %.6f %.6f %.6f %.6f %.6f %.6f\n",
-                    particles[i].mass, particles[i].x, particles[i].y, particles[i].z,
-                    particles[i].vx, particles[i].vy, particles[i].vz);
+                    mass[i], x[i], y[i], z[i], vx[i], vy[i], vz[i]);
         }
         fclose(fp);
     }
@@ -135,14 +167,15 @@ int main() {
     for (int step = 0; step < STEPS; step++) {
         double start = omp_get_wtime();
 
-        bodyForce(particles, DT, N);
+        // compute forces and update velocities (SoA)
+        bodyForceSoA(x, y, z, mass, vx, vy, vz, DT, N);
 
-        // Update positions (Euler method)
+        // Update positions (Euler) — vectorized
         #pragma omp parallel for schedule(static)
         for (int i = 0; i < N; i++) {
-            particles[i].x += particles[i].vx * DT;
-            particles[i].y += particles[i].vy * DT;
-            particles[i].z += particles[i].vz * DT;
+            x[i] += vx[i] * DT;
+            y[i] += vy[i] * DT;
+            z[i] += vz[i] * DT;
         }
 
         double end = omp_get_wtime();
@@ -157,17 +190,17 @@ int main() {
     printf("\nTotal simulation time : %.4f seconds\n", total_time);
     printf("Average time/step     : %.6f seconds\n", total_time / STEPS);
 
-    // Save final state
+    // Save final state (from SoA)
     fp = fopen("results/final_particles_openmp.txt", "w");
     if (fp) {
         for (int i = 0; i < N; i++) {
             fprintf(fp, "%.6f %.6f %.6f %.6f %.6f %.6f %.6f\n",
-                    particles[i].mass, particles[i].x, particles[i].y, particles[i].z,
-                    particles[i].vx, particles[i].vy, particles[i].vz);
+                    mass[i], x[i], y[i], z[i], vx[i], vy[i], vz[i]);
         }
         fclose(fp);
     }
 
+    free(mass); free(x); free(y); free(z); free(vx); free(vy); free(vz);
     free(particles);
     return 0;
 }
