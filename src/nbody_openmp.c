@@ -112,7 +112,7 @@ int main() {
     }
 
     // Optional: save initial state
-    FILE *fp = fopen("initial_particles_openmp.txt", "w");
+    FILE *fp = fopen("inputs/initial_particles_openmp.txt", "w");
     if (fp) {
         for (int i = 0; i < N; i++) {
             fprintf(fp, "%.6f %.6f %.6f %.6f %.6f %.6f %.6f\n",
