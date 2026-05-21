@@ -47,9 +47,6 @@ gcc -O2 -fopenmp -Iinclude -o nbody_omp src/nbody_openmp.c -lm
 # CUDA + MPI (preferred)
 nvcc -O2 -ccbin mpicxx -Iinclude -o nbody_cuda_mpi src/nbody_cuda_mpi.cu
 
-# CUDA + MPI (fallback if -ccbin mpicxx gives trouble)
-mpicxx -O2 -Iinclude -o nbody_cuda_mpi src/nbody_cuda_mpi.cu \
-    -I/usr/local/cuda/include -L/usr/local/cuda/lib64 -lcudart
 ```
 
 ### Windows (PowerShell with MinGW) — sequential and OpenMP only
