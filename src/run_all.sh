@@ -244,7 +244,7 @@ except Exception:
     raise SystemExit(2)
 PY
 then
-    if python3 plot_performance.py --csv "$summary_csv" --outdir "$results_dir" --logsdir "$log_dir"; then
+    if python3 plot_performance.py --csv "$summary_csv" --outdir "$results_dir/performance" --logsdir "$log_dir"; then
         printf 'Plots generated in %s/performance/ and %s\n' "$results_dir" "$results_dir"
     else
         printf 'plot_performance.py ran but failed (check output)\n'
