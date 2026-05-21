@@ -3,8 +3,9 @@
 
 typedef struct {
     float mass;
-    float x, y, z;     // position
-    float vx, vy, vz;  // velocity
+    float x,  y,  z;    /* position */
+    float vx, vy, vz;   /* velocity */
+    float _pad;
 } Particle;
 
-#endif
+#endif /* PARTICLE_H */

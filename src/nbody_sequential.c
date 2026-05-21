@@ -1,3 +1,4 @@
+#define _POSIX_C_SOURCE 199309L
 #include <stdio.h>
 #include <stdlib.h>
 #include <math.h>
@@ -120,13 +121,13 @@ int main() {
         fclose(fp);
     }
 
-    clock_t start, end;
+    struct timespec t0, t1;
     double total_time = 0.0;
 
     printf("Starting sequential N-body simulation (%d particles, %d steps)...\n", N, STEPS);
 
     for (int step = 0; step < STEPS; step++) {
-        start = clock();
+        clock_gettime(CLOCK_MONOTONIC, &t0);
 
         bodyForce(particles, DT, N);
 
@@ -137,8 +138,8 @@ int main() {
             particles[i].z += particles[i].vz * DT;
         }
 
-        end = clock();
-        double elapsed = ((double)(end - start)) / CLOCKS_PER_SEC;
+        clock_gettime(CLOCK_MONOTONIC, &t1);
+        double elapsed = (t1.tv_sec - t0.tv_sec) + (t1.tv_nsec - t0.tv_nsec) / 1e9;
         total_time += elapsed;
 
         if (step % 20 == 0) {
@@ -148,6 +149,14 @@ int main() {
 
     printf("Total simulation time: %.4f seconds\n", total_time);
     printf("Average time per step: %.6f seconds\n", total_time / STEPS);
+
+    // Quick checksum / summary so we can sanity-check across backends
+    double sum_x = 0.0, sum_v = 0.0;
+    for (int i = 0; i < N; i++) {
+        sum_x += particles[i].x + particles[i].y + particles[i].z;
+        sum_v += particles[i].vx + particles[i].vy + particles[i].vz;
+    }
+    printf("Checksum: sum(pos) = %.6e   sum(vel) = %.6e\n", sum_x, sum_v);
 
     // Save final state
     fp = fopen("results/final_particles_sequential.txt", "w");

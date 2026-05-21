@@ -154,11 +154,18 @@ int main() {
         fclose(fp);
     }
 
+    int actual_threads = 0;
+    #pragma omp parallel
+    {
+        #pragma omp single
+        actual_threads = omp_get_num_threads();
+    }
+
     printf("OpenMP N-body simulation\n");
     printf("------------------------\n");
     printf("Particles       : %d\n", N);
     printf("Steps           : %d\n", STEPS);
-    printf("Threads         : %d\n", omp_get_max_threads());
+    printf("Threads         : %d\n", actual_threads);
     printf("Softening       : %.1e\n", SOFTENING);
     printf("Time step (dt)  : %.3f\n\n", DT);
 
