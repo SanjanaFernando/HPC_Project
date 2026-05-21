@@ -1,73 +1,136 @@
 # N-Body HPC Project
 
-## How to run
+Three implementations of the same direct O(N²) gravitational N-body
+simulation with the Euler integrator:
 
-This repository contains two C implementations of an N-body simulation:
+- `src/nbody_sequential.c` — single-threaded baseline
+- `src/nbody_openmp.c` — OpenMP (shared memory)
+- `src/nbody_cuda_mpi.cu` — CUDA + MPI (one GPU per MPI rank)
 
-- `nbody_sequential.c` — sequential implementation
-- `nbody_openmp.c` — OpenMP-parallel implementation
+All three read the same `initial_particles.txt`, run identical physics, and
+print a final checksum line so the backends can be compared.
 
-Prerequisites
+## Layout
 
-- A C compiler (gcc/clang). On Windows, use MinGW or WSL for best compatibility.
+```
+.
+├── include/        shared headers (particle.h, nbody_io.h)
+├── src/            the three simulation programs
+└── results/        per-backend final-state output files (created at runtime)
+```
 
-Build
+## Prerequisites
 
-From the `src/` directory, build the programs as follows.
+- A C compiler (gcc/clang) for the sequential and OpenMP versions
+- An OpenMP-capable compiler for the OpenMP version (gcc/clang/MSVC all work)
+- For the CUDA + MPI version:
+  - NVIDIA CUDA Toolkit (provides `nvcc`)
+  - An MPI implementation, e.g. OpenMPI or MPICH (provides `mpirun`/`mpicxx`)
+  - An NVIDIA GPU with a compatible driver
 
-Linux / WSL:
+On Windows, use WSL2 for the CUDA + MPI build. MinGW handles the sequential
+and OpenMP versions fine.
+
+## Build
+
+All commands assume the project root as the working directory.
+
+### Linux / WSL
 
 ```bash
-gcc -O2 -o nbody_seq nbody_sequential.c -lm
-gcc -O2 -fopenmp -o nbody_omp nbody_openmp.c -lm
+# Sequential
+gcc -O2 -Iinclude -o nbody_seq src/nbody_sequential.c -lm
+
+# OpenMP
+gcc -O2 -fopenmp -Iinclude -o nbody_omp src/nbody_openmp.c -lm
+
+# CUDA + MPI (preferred)
+nvcc -O2 -ccbin mpicxx -Iinclude -o nbody_cuda_mpi src/nbody_cuda_mpi.cu
+
+# CUDA + MPI (fallback if -ccbin mpicxx gives trouble)
+mpicxx -O2 -Iinclude -o nbody_cuda_mpi src/nbody_cuda_mpi.cu \
+    -I/usr/local/cuda/include -L/usr/local/cuda/lib64 -lcudart
 ```
 
-Windows (PowerShell with MinGW):
+### Windows (PowerShell with MinGW) — sequential and OpenMP only
 
 ```powershell
-gcc -O2 -o nbody_seq.exe nbody_sequential.c -lm
-gcc -O2 -fopenmp -o nbody_omp.exe nbody_openmp.c -lm
+gcc -O2 -Iinclude -o nbody_seq.exe src/nbody_sequential.c -lm
+gcc -O2 -fopenmp -Iinclude -o nbody_omp.exe src/nbody_openmp.c -lm
 ```
 
-Run
+For CUDA + MPI on Windows, use WSL2 with the Linux instructions above.
 
-Both programs use `initial_particles.txt` (in the `src/` folder) as the input file. They write final particle states to `results/final_particles_sequential.txt` and `results/final_particles_openmp.txt` respectively.
+## Run
 
-Linux / WSL:
+Make sure the `results/` directory exists before the first run:
+
+```bash
+mkdir -p results
+```
+
+(PowerShell: `New-Item -ItemType Directory results`.)
+
+All three programs read `initial_particles.txt` from the current working
+directory. If that file is absent, the program generates a deterministic
+random initial state from `SEED=42` and writes it out, so subsequent runs
+of any backend start from the same state.
+
+### Linux / WSL
 
 ```bash
 # Sequential
 ./nbody_seq
 
-# OpenMP (set threads, e.g. 4)
+# OpenMP — set the thread count via OMP_NUM_THREADS
 export OMP_NUM_THREADS=4
 ./nbody_omp
+
+# CUDA + MPI — one MPI rank per GPU
+mpirun -np 2 ./nbody_cuda_mpi
 ```
 
-PowerShell (Windows):
+Use `-np 1` if you only have one GPU. Running more ranks than GPUs makes
+them share GPUs round-robin, which works but isn't useful for benchmarks.
+
+### Windows (PowerShell with MinGW) — sequential and OpenMP only
 
 ```powershell
-# Sequential
 .\nbody_seq.exe
 
-# OpenMP (set threads, e.g. 4)
 $env:OMP_NUM_THREADS = 4
 .\nbody_omp.exe
 ```
 
-Notes
+## What each run produces
 
-- The number of particles (`N`), number of steps (`STEPS`), time step (`DT`) and other simulation constants are set as macros at the top of each `.c` file — edit those values to run different configurations.
-- If `initial_particles.txt` is not present, the programs will generate a random initial state and (in some variants) save it under `inputs/` or the project root.
-- Ensure the `results/` directory exists before running, e.g. `mkdir -p results` (WSL/Linux) or `New-Item -ItemType Directory results` (PowerShell) if needed.
+Each program prints per-step timings, total wall time, average time per
+step, and a final `Checksum:` line summing all positions and velocities.
+The three backends' checksums should agree to several significant figures;
+small differences are normal floating-point reduction-order effects.
 
-Files of interest
+| Backend  | Final state file                          |
+|----------|-------------------------------------------|
+| seq      | `results/final_particles_sequential.txt`  |
+| openmp   | `results/final_particles_openmp.txt`      |
+| cuda_mpi | `results/final_particles_cuda_mpi.txt`    |
 
-- [nbody_sequential.c](nbody_sequential.c)
-- [nbody_openmp.c](nbody_openmp.c)
-- [particle.h](particle.h)
+## Notes
 
-Results
+- `N`, `STEPS`, `DT`, `SOFTENING` and other parameters are `#define` macros
+  at the top of each source file. Edit and rebuild to change configuration.
+  All three files must use the same `N` for a meaningful checksum comparison.
+- For the CUDA + MPI version, `N` must be divisible by the number of MPI
+  ranks (the program checks at startup and aborts cleanly otherwise).
+- The integrator is plain Euler with a very small softening parameter.
+  The simulation is not physically stable — particles will fly apart on a
+  short time horizon. The project's purpose is the parallel performance
+  comparison, not the underlying physics.
 
-- Sequential final state: `results/final_particles_sequential.txt`
-- OpenMP final state: `results/final_particles_openmp.txt`
+## Files of interest
+
+- [include/particle.h](include/particle.h)
+- [include/nbody_io.h](include/nbody_io.h)
+- [src/nbody_sequential.c](src/nbody_sequential.c)
+- [src/nbody_openmp.c](src/nbody_openmp.c)
+- [src/nbody_cuda_mpi.cu](src/nbody_cuda_mpi.cu)

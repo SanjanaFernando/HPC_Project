@@ -122,11 +122,18 @@ int main() {
         fclose(fp);
     }
 
+    int actual_threads = 0;
+    #pragma omp parallel
+    {
+        #pragma omp single
+        actual_threads = omp_get_num_threads();
+    }
+
     printf("OpenMP N-body simulation\n");
     printf("------------------------\n");
     printf("Particles       : %d\n", N);
     printf("Steps           : %d\n", STEPS);
-    printf("Threads         : %d\n", omp_get_max_threads());
+    printf("Threads         : %d\n", actual_threads);
     printf("Softening       : %.1e\n", SOFTENING);
     printf("Time step (dt)  : %.3f\n\n", DT);
 
@@ -156,6 +163,14 @@ int main() {
 
     printf("\nTotal simulation time : %.4f seconds\n", total_time);
     printf("Average time/step     : %.6f seconds\n", total_time / STEPS);
+
+    // Quick checksum / summary so we can sanity-check across backends
+    double sum_x = 0.0, sum_v = 0.0;
+    for (int i = 0; i < N; i++) {
+        sum_x += particles[i].x + particles[i].y + particles[i].z;
+        sum_v += particles[i].vx + particles[i].vy + particles[i].vz;
+    }
+    printf("Checksum: sum(pos) = %.6e   sum(vel) = %.6e\n", sum_x, sum_v);
 
     // Save final state
     fp = fopen("results/final_particles_openmp.txt", "w");
