@@ -1,0 +1,8 @@
+Starting sequential N-body simulation (10240 particles, 100 steps)...
+Step 0: 0.4335 seconds
+Step 20: 0.4289 seconds
+Step 40: 0.4368 seconds
+Step 60: 0.4362 seconds
+Step 80: 0.4390 seconds
+Total simulation time: 44.9545 seconds
+Average time per step: 0.449545 seconds

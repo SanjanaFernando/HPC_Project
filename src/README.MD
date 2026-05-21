@@ -2,10 +2,11 @@
 
 ## How to run
 
-This repository contains two C implementations of an N-body simulation:
+This repository contains three C implementations of an N-body simulation:
 
 - `nbody_sequential.c` — sequential implementation
 - `nbody_openmp.c` — OpenMP-parallel implementation
+- `nbody_mpi.c` — MPI-parallel implementation
 
 Prerequisites
 
@@ -20,6 +21,7 @@ Linux / WSL:
 ```bash
 gcc -O2 -o nbody_seq nbody_sequential.c -lm
 gcc -O3 -march=native -fopenmp -o nbody_omp nbody_openmp.c -lm
+mpicc -O2 -o nbody_mpi nbody_mpi.c -lm
 ```
 
 Windows (PowerShell with MinGW):
@@ -27,11 +29,12 @@ Windows (PowerShell with MinGW):
 ```powershell
 gcc -O2 -o nbody_seq.exe nbody_sequential.c -lm
 gcc -O2 -fopenmp -o nbody_omp.exe nbody_openmp.c -lm
+mpicc -O2 -o nbody_mpi.exe nbody_mpi.c -lm
 ```
 
 Run
 
-Both programs use `initial_particles.txt` (in the `src/` folder) as the input file. They write final particle states to `results/final_particles_sequential.txt` and `results/final_particles_openmp.txt` respectively.
+All three programs use `inputs/initial_particales.txt` as the shared source input and save per-method snapshots into `inputs/`. Final states are written to `results/final_particles_sequential.txt`, `results/final_particles_openmp.txt`, and `results/final_particles_mpi.txt`.
 
 Linux / WSL:
 
@@ -43,10 +46,14 @@ Linux / WSL:
 export OMP_NUM_THREADS=4
 ./nbody_omp
 
+# MPI (set processes, e.g. 4)
+mpirun -np 4 ./nbody_mpi
+```
+
 Notes for best performance
+
 - Compile with `-O3 -march=native` and enable OpenMP: `-fopenmp`.
 - Optionally enable fast-math with `-ffast-math` for extra speed (may change numerics).
-```
 
 PowerShell (Windows):
 
@@ -57,7 +64,21 @@ PowerShell (Windows):
 # OpenMP (set threads, e.g. 4)
 $env:OMP_NUM_THREADS = 4
 .\nbody_omp.exe
+
+# MPI (set processes, e.g. 4)
+mpirun -np 4 .\nbody_mpi.exe
 ```
+
+Benchmark script
+
+Run all three builds, capture logs, and save a performance summary from WSL:
+
+```bash
+chmod +x ./run_all.sh
+./run_all.sh -t 8 -p 4
+```
+
+This writes logs to `results/logs/`, a CSV summary to `results/performance_summary.csv`, and a readable comparison report to `results/performance_summary.txt`.
 
 Notes
 

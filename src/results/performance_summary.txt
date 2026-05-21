@@ -1,0 +1,11 @@
+Performance comparison (lower is faster)
+Program      Total(s)    Avg(s)      OutputBytes
+------------------------------------------------
+OpenMP       4.3659     0.043659   843259
+MPI          19.0890    0.190890   843259
+Sequential   44.9545    0.449545   843259
+
+Speedup vs Sequential
+OpenMP       10.30x
+MPI          2.35x
+Sequential   1.00x
