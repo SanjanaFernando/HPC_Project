@@ -4,15 +4,17 @@ set -euo pipefail
 OPENMP_THREADS=8
 MPI_PROCESSES=4
 SKIP_MPI=0
+SKIP_CUDA=0
 
 usage() {
     cat <<'EOF'
-Usage: ./run_all.sh [-t threads] [-p processes] [--skip-mpi]
+Usage: ./run_all.sh [-t threads] [-p processes] [--skip-mpi] [--skip-cuda]
 
 Options:
   -t, --threads     OpenMP thread count (default: 8)
   -p, --processes   MPI process count (default: 4)
       --skip-mpi    Build and run only sequential + OpenMP
+    --skip-cuda   Skip CUDA + MPI build and run
 EOF
 }
 
@@ -28,6 +30,10 @@ while [[ $# -gt 0 ]]; do
             ;;
         --skip-mpi)
             SKIP_MPI=1
+            shift
+            ;;
+        --skip-cuda)
+            SKIP_CUDA=1
             shift
             ;;
         -h|--help)
@@ -119,8 +125,9 @@ fi
 seq_bin="nbody_seq_bench"
 omp_bin="nbody_omp_bench"
 mpi_bin="nbody_mpi_bench"
+cuda_bin="nbody_cuda_mpi_bench"
 
-rm -f "$script_root/$seq_bin" "$script_root/$omp_bin" "$script_root/$mpi_bin" || true
+rm -f "$script_root/$seq_bin" "$script_root/$omp_bin" "$script_root/$mpi_bin" "$script_root/$cuda_bin" || true
 
 # Compile sequential
 compile_program gcc "$seq_bin" -O2 -o "$script_root/$seq_bin" nbody_sequential.c -lm
@@ -133,9 +140,20 @@ if [[ "$SKIP_MPI" -eq 0 ]]; then
     compile_program mpicc "$mpi_bin" -O2 -o "$script_root/$mpi_bin" nbody_mpi.c -lm
 fi
 
+cuda_available=0
+if [[ "$SKIP_CUDA" -eq 0 ]]; then
+    if command -v nvcc >/dev/null 2>&1 && command -v mpicxx >/dev/null 2>&1; then
+        cuda_available=1
+        compile_program nvcc "$cuda_bin" -O2 -ccbin mpicxx -o "$script_root/$cuda_bin" nbody_cuda_mpi.cu
+    else
+        echo "Skipping CUDA + MPI build: nvcc and/or mpicxx not found in PATH." >&2
+    fi
+fi
+
 seq_log="$log_dir/sequential.log"
 omp_log="$log_dir/openmp.log"
 mpi_log="$log_dir/mpi.log"
+cuda_log="$log_dir/cuda_mpi.log"
 summary_csv="$results_dir/performance_summary.csv"
 summary_txt="$results_dir/performance_summary.txt"
 
@@ -157,6 +175,13 @@ if [[ "$SKIP_MPI" -eq 0 ]]; then
     run_and_log "$mpi_log" mpirun --allow-run-as-root -np "$MPI_PROCESSES" "$script_root/$mpi_bin"
     mpi_record="$(record_result 'MPI' "$mpi_log" "$results_dir/final_particles_mpi.txt")"
     printf '%s\n' "$mpi_record" >> "$summary_csv"
+fi
+
+if [[ "$cuda_available" -eq 1 ]]; then
+    printf 'Running CUDA + MPI with %s processes...\n' "$MPI_PROCESSES"
+    run_and_log "$cuda_log" mpirun --allow-run-as-root -np "$MPI_PROCESSES" "$script_root/$cuda_bin"
+    cuda_record="$(record_result 'CUDA_MPI' "$cuda_log" "$results_dir/final_particles_cuda_mpi.txt")"
+    printf '%s\n' "$cuda_record" >> "$summary_csv"
 fi
 
 python3 - <<'PY' "$summary_csv" "$summary_txt"
@@ -208,3 +233,22 @@ printf 'Human-readable summary saved to %s\n\n' "$summary_txt"
 cat "$summary_csv"
 printf '\nDetailed comparison:\n'
 cat "$summary_txt"
+
+# Attempt to generate plots using plot_performance.py (optional dependency: matplotlib)
+printf '\nGenerating performance plots (if matplotlib available)...\n'
+if python3 - <<'PY' 2>/dev/null
+try:
+    import matplotlib  # noqa: F401
+    raise SystemExit(0)
+except Exception:
+    raise SystemExit(2)
+PY
+then
+    if python3 plot_performance.py --csv "$summary_csv" --outdir "$results_dir" --logsdir "$log_dir"; then
+        printf 'Plots generated in %s/performance/ and %s\n' "$results_dir" "$results_dir"
+    else
+        printf 'plot_performance.py ran but failed (check output)\n'
+    fi
+else
+    printf 'matplotlib not found in the active Python environment. Install with: pip3 install matplotlib\n'
+fi

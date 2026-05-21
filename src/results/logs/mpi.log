@@ -6,11 +6,11 @@ Processes : 4
 Softening : 1.0e-09
 dt        : 0.010
 
-Step   0   time: 0.2216 s
-Step  20   time: 0.1607 s
-Step  40   time: 0.1624 s
-Step  60   time: 0.1845 s
-Step  80   time: 0.1651 s
+Step   0   time: 0.1405 s
+Step  20   time: 0.1972 s
+Step  40   time: 0.2107 s
+Step  60   time: 0.1428 s
+Step  80   time: 0.1854 s
 
-Total simulation time : 17.8318 seconds
-Average time/step     : 0.178318 seconds
+Total simulation time : 19.1641 seconds
+Average time/step     : 0.191641 seconds

@@ -58,12 +58,17 @@ def read_step_logs(log_dir):
         "MPI": [
             re.compile(r"^Step\s+(\d+)\s+time:\s+([0-9]*\.?[0-9]+)\s+s\s*$"),
         ],
+        "CUDA_MPI": [
+            re.compile(r"^Step\s+(\d+):\s+([0-9]*\.?[0-9]+)\s+seconds\s*$"),
+            re.compile(r"^Step\s+(\d+)\s+time:\s+([0-9]*\.?[0-9]+)\s+s\s*$"),
+        ],
     }
 
     log_files = {
         "Sequential": log_dir / "sequential.log",
         "OpenMP": log_dir / "openmp.log",
         "MPI": log_dir / "mpi.log",
+        "CUDA_MPI": log_dir / "cuda_mpi.log",
     }
 
     series = {}
@@ -178,6 +183,7 @@ def plot_steps(step_series, outpath):
         "Sequential": "#4C72B0",
         "OpenMP": "#55A868",
         "MPI": "#C44E52",
+        "CUDA_MPI": "#8172B2",
     }
 
     for program, points in step_series.items():

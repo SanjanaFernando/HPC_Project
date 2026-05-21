@@ -24,7 +24,7 @@
 #define DT           0.01f
 #define G            1.0f
 #define STEPS        100
-#define INITIAL_FILE "initial_particles.txt"
+#define INITIAL_FILE "inputs/initial_particles.txt"
 #define SEED         42u
 #define BLOCK_SIZE   128
 
@@ -178,6 +178,14 @@ int main(int argc, char **argv) {
         }
     }
     MPI_Bcast(particles, N * sizeof(Particle), MPI_BYTE, 0, MPI_COMM_WORLD);
+
+    /* Save a copy of the initial snapshot specific to the CUDA run so
+       each variant records its own initial input for later comparison. */
+    if (rank == 0) {
+        if (!saveParticles("inputs/initial_particles_cuda.txt", particles, N)) {
+            fprintf(stderr, "Warning: failed to save inputs/initial_particles_cuda.txt\n");
+        }
+    }
 
     // GPU buffers: full positions (N) + local velocities (local_n).
     Particle *d_pos = NULL;
