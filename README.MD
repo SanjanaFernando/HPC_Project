@@ -123,11 +123,3 @@ small differences are normal floating-point reduction-order effects.
   The simulation is not physically stable — particles will fly apart on a
   short time horizon. The project's purpose is the parallel performance
   comparison, not the underlying physics.
-
-## Files of interest
-
-- [include/particle.h](include/particle.h)
-- [include/nbody_io.h](include/nbody_io.h)
-- [src/nbody_sequential.c](src/nbody_sequential.c)
-- [src/nbody_openmp.c](src/nbody_openmp.c)
-- [src/nbody_cuda_mpi.cu](src/nbody_cuda_mpi.cu)
