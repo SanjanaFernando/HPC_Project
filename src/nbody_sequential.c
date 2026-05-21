@@ -1,164 +1,103 @@
+/* Sequential N-body simulation.
+ *
+ * Direct O(N^2) pairwise force evaluation with the Euler integrator. The
+ * value accumulated as "force" is treated directly as an acceleration on
+ * the velocity update (i.e. the i-particle mass is implicitly unit), which
+ * matches the convention used by the OpenMP and CUDA+MPI versions. */
+
+#define _POSIX_C_SOURCE 199309L
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <math.h>
 #include <time.h>
 
-#include "particle.h"  // or define struct here
+#include "particle.h"
+#include "nbody_io.h"
 
-#define N 10240          // start small, later increase to 4096, 8192, etc.
-#define SOFTENING 1e-9f // avoid division by zero / singularity
-#define DT 0.01f        // time step
-#define G 1.0f          // gravitational constant (can be 1 in normalized units)
-#define STEPS 100       // number of time steps (increase for longer sim)
+#define N            10240
+#define SOFTENING    1e-9f
+#define DT           0.01f
+#define G            1.0f
+#define STEPS        100
 #define INITIAL_FILE "initial_particles.txt"
-#define SEED 42u
+#define RESULT_FILE  "results/final_particles_sequential.txt"
+#define SEED         42u
 
-int loadParticles(const char *filename, Particle *particles, int n) {
-    FILE *fp = fopen(filename, "r");
-    if (!fp) {
-        return 0;
-    }
-
+static void body_force(Particle *particles, int n) {
     for (int i = 0; i < n; i++) {
-        if (fscanf(fp, "%f %f %f %f %f %f %f",
-                   &particles[i].mass,
-                   &particles[i].x,
-                   &particles[i].y,
-                   &particles[i].z,
-                   &particles[i].vx,
-                   &particles[i].vy,
-                   &particles[i].vz) != 7) {
-            fclose(fp);
-            return 0;
-        }
-    }
-
-    fclose(fp);
-    return 1;
-}
-
-int saveParticles(const char *filename, Particle *particles, int n) {
-    FILE *fp = fopen(filename, "w");
-    if (!fp) {
-        return 0;
-    }
-
-    for (int i = 0; i < n; i++) {
-        fprintf(fp, "%.6f %.6f %.6f %.6f %.6f %.6f %.6f\n",
-                particles[i].mass, particles[i].x, particles[i].y, particles[i].z,
-                particles[i].vx, particles[i].vy, particles[i].vz);
-    }
-
-    fclose(fp);
-    return 1;
-}
-
-void generateParticles(Particle *particles, int n, unsigned int seed) {
-    srand(seed);
-
-    for (int i = 0; i < n; i++) {
-        particles[i].mass = 20.0f + ((float)rand() / RAND_MAX) * 80.0f;
-        particles[i].x  = 2.0f * ((float)rand() / RAND_MAX - 0.5f);
-        particles[i].y  = 2.0f * ((float)rand() / RAND_MAX - 0.5f);
-        particles[i].z  = 2.0f * ((float)rand() / RAND_MAX - 0.5f);
-        particles[i].vx = 0.0f;
-        particles[i].vy = 0.0f;
-        particles[i].vz = 0.0f;
-    }
-}
-
-void bodyForce(Particle *particles, float dt, int n) {
-    for (int i = 0; i < n; i++) {
-        float Fx = 0.0f;
-        float Fy = 0.0f;
-        float Fz = 0.0f;
+        float Fx = 0.0f, Fy = 0.0f, Fz = 0.0f;
 
         for (int j = 0; j < n; j++) {
             float dx = particles[j].x - particles[i].x;
             float dy = particles[j].y - particles[i].y;
             float dz = particles[j].z - particles[i].z;
 
-            float distSqr = dx*dx + dy*dy + dz*dz + SOFTENING;
-            float invDist = 1.0f / sqrtf(distSqr);
+            float distSqr  = dx*dx + dy*dy + dz*dz + SOFTENING;
+            float invDist  = 1.0f / sqrtf(distSqr);
             float invDist3 = invDist * invDist * invDist;
 
-            float force = G * particles[j].mass * invDist3;  // F = G m_j / r^3 * direction (since acc = F/m_i, but m_i cancels later)
+            float a = G * particles[j].mass * invDist3;
 
-            Fx += dx * force;
-            Fy += dy * force;
-            Fz += dz * force;
+            Fx += dx * a;
+            Fy += dy * a;
+            Fz += dz * a;
         }
 
-        // Update velocity (acceleration = force, since we absorbed 1/m_i already in many codes; here we assume unit mass or adjust)
-        particles[i].vx += dt * Fx;
-        particles[i].vy += dt * Fy;
-        particles[i].vz += dt * Fz;
+        particles[i].vx += DT * Fx;
+        particles[i].vy += DT * Fy;
+        particles[i].vz += DT * Fz;
     }
 }
 
-int main() {
-    Particle *particles = (Particle*) malloc(N * sizeof(Particle));
+int main(void) {
+    Particle *particles = (Particle *) malloc(N * sizeof(Particle));
     if (!particles) {
-        printf("Memory allocation failed!\n");
+        fprintf(stderr, "Memory allocation failed\n");
         return 1;
     }
 
-    if (!loadParticles(INITIAL_FILE, particles, N)) {
-        generateParticles(particles, N, SEED);
-        if (!saveParticles(INITIAL_FILE, particles, N)) {
+    if (!load_particles(INITIAL_FILE, particles, N)) {
+        generate_particles(particles, N, SEED);
+        if (!save_particles(INITIAL_FILE, particles, N))
             fprintf(stderr, "Warning: failed to save %s\n", INITIAL_FILE);
-        }
     }
 
-    FILE *fp = fopen("initial_particles_sequential.txt", "w");
-    if (fp) {
-        for (int i = 0; i < N; i++) {
-            fprintf(fp, "%.6f %.6f %.6f %.6f %.6f %.6f %.6f\n",
-                    particles[i].mass, particles[i].x, particles[i].y, particles[i].z,
-                    particles[i].vx, particles[i].vy, particles[i].vz);
-        }
-        fclose(fp);
-    }
+    printf("Sequential N-body simulation\n");
+    printf("----------------------------\n");
+    printf("Particles       : %d\n", N);
+    printf("Steps           : %d\n", STEPS);
+    printf("Softening       : %.1e\n", SOFTENING);
+    printf("Time step (dt)  : %.3f\n\n", DT);
 
-    clock_t start, end;
+    struct timespec t0, t1;
     double total_time = 0.0;
 
-    printf("Starting sequential N-body simulation (%d particles, %d steps)...\n", N, STEPS);
-
     for (int step = 0; step < STEPS; step++) {
-        start = clock();
+        clock_gettime(CLOCK_MONOTONIC, &t0);
 
-        bodyForce(particles, DT, N);
+        body_force(particles, N);
 
-        // Update positions after velocity (basic Euler)
         for (int i = 0; i < N; i++) {
             particles[i].x += particles[i].vx * DT;
             particles[i].y += particles[i].vy * DT;
             particles[i].z += particles[i].vz * DT;
         }
 
-        end = clock();
-        double elapsed = ((double)(end - start)) / CLOCKS_PER_SEC;
+        clock_gettime(CLOCK_MONOTONIC, &t1);
+        double elapsed = (t1.tv_sec - t0.tv_sec) + (t1.tv_nsec - t0.tv_nsec) / 1e9;
         total_time += elapsed;
 
-        if (step % 10 == 0) {
-            printf("Step %d: %.4f seconds\n", step, elapsed);
-        }
+        if (step % 10 == 0)
+            printf("Step %3d  time: %.4f s\n", step, elapsed);
     }
 
-    printf("Total simulation time: %.4f seconds\n", total_time);
-    printf("Average time per step: %.6f seconds\n", total_time / STEPS);
+    printf("\nTotal simulation time : %.4f seconds\n", total_time);
+    printf("Average time/step     : %.6f seconds\n", total_time / STEPS);
+    print_checksum(particles, N);
 
-    // Save final state
-    fp = fopen("results/final_particles_sequential.txt", "w");
-    if (fp) {
-        for (int i = 0; i < N; i++) {
-            fprintf(fp, "%.6f %.6f %.6f %.6f %.6f %.6f %.6f\n",
-                    particles[i].mass, particles[i].x, particles[i].y, particles[i].z,
-                    particles[i].vx, particles[i].vy, particles[i].vz);
-        }
-        fclose(fp);
-    }
+    if (!save_particles(RESULT_FILE, particles, N))
+        fprintf(stderr, "Warning: failed to write %s\n", RESULT_FILE);
 
     free(particles);
     return 0;
