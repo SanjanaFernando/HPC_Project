@@ -11,7 +11,7 @@
 #define DT         0.01f      // Time step
 #define G          1.0f       // Gravitational constant (normalized units)
 #define STEPS      100        // Number of simulation steps
-#define INITIAL_FILE "initial_particles.txt"
+#define INITIAL_FILE "inputs/initial_particles.txt"
 #define SEED 42u
 
 int loadParticles(const char *filename, Particle *particles, int n) {

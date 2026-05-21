@@ -1,109 +1,138 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <math.h>
-#include <string.h>
 #include <mpi.h>
 #include "particle.h"
 
 #define N 10240
 #define STEPS 100
-#define DT 0.01
-#define G 1.0
-#define EPS 1e-9
+#define DT 0.01f
+#define G 1.0f
+#define EPS 1e-9f
+
+#define INITIAL_FILE "inputs/initial_particles.txt"
+#define INITIAL_SNAPSHOT_FILE "inputs/initial_particles_mpi.txt"
+#define FINAL_FILE "results/final_particles_mpi.txt"
+#define SEED 42u
+
+/* ====================== I/O ====================== */
+int load_particles(const char *filename, Particle *particles, int n) {
+    FILE *fp = fopen(filename, "r");
+    if (!fp) return 0;
+    for (int i = 0; i < n; i++) {
+        if (fscanf(fp, "%f %f %f %f %f %f %f",
+                   &particles[i].mass, &particles[i].x, &particles[i].y, &particles[i].z,
+                   &particles[i].vx, &particles[i].vy, &particles[i].vz) != 7) {
+            fclose(fp);
+            return 0;
+        }
+    }
+    fclose(fp);
+    return 1;
+}
+
+int save_particles(const char *filename, Particle *particles, int n) {
+    FILE *fp = fopen(filename, "w");
+    if (!fp) return 0;
+    for (int i = 0; i < n; i++) {
+        fprintf(fp, "%.6f %.6f %.6f %.6f %.6f %.6f %.6f\n",
+                particles[i].mass, particles[i].x, particles[i].y, particles[i].z,
+                particles[i].vx, particles[i].vy, particles[i].vz);
+    }
+    fclose(fp);
+    return 1;
+}
 
 void initialize_particles(Particle *particles, int n) {
-    srand(42);
+    srand(SEED);
     for (int i = 0; i < n; i++) {
-        particles[i].x = (double)rand() / RAND_MAX;
-        particles[i].y = (double)rand() / RAND_MAX;
-        particles[i].z = (double)rand() / RAND_MAX;
-
-        particles[i].vx = 0.0;
-        particles[i].vy = 0.0;
-        particles[i].vz = 0.0;
-
-        particles[i].mass = 1.0 + (double)rand() / RAND_MAX;
+        particles[i].mass = 20.0f + ((float)rand() / RAND_MAX) * 80.0f;
+        particles[i].x   = 2.0f * ((float)rand() / RAND_MAX - 0.5f);
+        particles[i].y   = 2.0f * ((float)rand() / RAND_MAX - 0.5f);
+        particles[i].z   = 2.0f * ((float)rand() / RAND_MAX - 0.5f);
+        particles[i].vx = particles[i].vy = particles[i].vz = 0.0f;
     }
 }
 
-void save_particles(const char *filename, Particle *particles, int n) {
-    FILE *fp = fopen(filename, "w");
-    if (!fp) {
-        printf("Error: Cannot open file %s for writing.\n", filename);
-        return;
-    }
-
-    for (int i = 0; i < n; i++) {
-        fprintf(fp, "%lf %lf %lf %lf %lf %lf %lf\n",
-                particles[i].x, particles[i].y, particles[i].z,
-                particles[i].vx, particles[i].vy, particles[i].vz,
-                particles[i].mass);
-    }
-
-    fclose(fp);
-}
-
+/* ====================== Main ====================== */
 int main(int argc, char *argv[]) {
     int rank, size;
-
     MPI_Init(&argc, &argv);
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
     MPI_Comm_size(MPI_COMM_WORLD, &size);
 
     if (N % size != 0) {
-        if (rank == 0) {
-            printf("Error: N (%d) must be divisible by number of processes (%d).\n", N, size);
-        }
+        if (rank == 0)
+            fprintf(stderr, "Error: N (%d) must be divisible by processes (%d)\n", N, size);
         MPI_Finalize();
         return 1;
     }
 
     int local_n = N / size;
 
-    Particle *all_particles = (Particle *)malloc(N * sizeof(Particle));
-    Particle *local_particles = (Particle *)malloc(local_n * sizeof(Particle));
+    Particle *all_particles  = malloc(N * sizeof(Particle));
+    Particle *local_particles = malloc(local_n * sizeof(Particle));
 
     if (!all_particles || !local_particles) {
-        printf("Memory allocation failed on rank %d\n", rank);
+        fprintf(stderr, "Memory allocation failed on rank %d\n", rank);
         MPI_Finalize();
         return 1;
     }
 
     MPI_Datatype MPI_PARTICLE;
-    MPI_Type_contiguous(7, MPI_DOUBLE, &MPI_PARTICLE);
+    MPI_Type_contiguous(7, MPI_FLOAT, &MPI_PARTICLE);
     MPI_Type_commit(&MPI_PARTICLE);
 
+    /* Root loads or generates initial data */
     if (rank == 0) {
-        initialize_particles(all_particles, N);
+        if (!load_particles(INITIAL_FILE, all_particles, N)) {
+            initialize_particles(all_particles, N);
+            save_particles(INITIAL_FILE, all_particles, N);
+        }
+        save_particles(INITIAL_SNAPSHOT_FILE, all_particles, N);
     }
 
     MPI_Scatter(all_particles, local_n, MPI_PARTICLE,
-                local_particles, local_n, MPI_PARTICLE,
-                0, MPI_COMM_WORLD);
+                local_particles, local_n, MPI_PARTICLE, 0, MPI_COMM_WORLD);
 
-    double start_time = MPI_Wtime();
+    if (rank == 0) {
+        printf("MPI N-body simulation (optimized v2)\n");
+        printf("-----------------------------------\n");
+        printf("Particles : %d\n", N);
+        printf("Steps     : %d\n", STEPS);
+        printf("Processes : %d\n", size);
+        printf("Softening : %.1e\n", EPS);
+        printf("dt        : %.3f\n\n", DT);
+    }
+
+    double total_time = 0.0;
 
     for (int step = 0; step < STEPS; step++) {
+        double step_start = MPI_Wtime();
 
         MPI_Allgather(local_particles, local_n, MPI_PARTICLE,
-                      all_particles, local_n, MPI_PARTICLE,
+                      all_particles,  local_n, MPI_PARTICLE,
                       MPI_COMM_WORLD);
 
+        /* Force calculation */
         for (int i = 0; i < local_n; i++) {
-            double fx = 0.0, fy = 0.0, fz = 0.0;
+            float fx = 0.0f, fy = 0.0f, fz = 0.0f;
+            const Particle *p_i = &local_particles[i];
 
             for (int j = 0; j < N; j++) {
-                double dx = all_particles[j].x - local_particles[i].x;
-                double dy = all_particles[j].y - local_particles[i].y;
-                double dz = all_particles[j].z - local_particles[i].z;
+                const Particle *p_j = &all_particles[j];
 
-                double distSqr = dx * dx + dy * dy + dz * dz + EPS;
-                double dist = sqrt(distSqr);
-                double invDist3 = 1.0 / (distSqr * dist);
+                float dx = p_j->x - p_i->x;
+                float dy = p_j->y - p_i->y;
+                float dz = p_j->z - p_i->z;
 
-                fx += G * all_particles[j].mass * dx * invDist3;
-                fy += G * all_particles[j].mass * dy * invDist3;
-                fz += G * all_particles[j].mass * dz * invDist3;
+                float distSqr = dx*dx + dy*dy + dz*dz + EPS;
+                float dist    = sqrtf(distSqr);
+                float invDist3 = 1.0f / (distSqr * dist);
+
+                fx += G * p_j->mass * dx * invDist3;
+                fy += G * p_j->mass * dy * invDist3;
+                fz += G * p_j->mass * dz * invDist3;
             }
 
             local_particles[i].vx += fx * DT;
@@ -111,22 +140,28 @@ int main(int argc, char *argv[]) {
             local_particles[i].vz += fz * DT;
         }
 
+        /* Position update */
         for (int i = 0; i < local_n; i++) {
             local_particles[i].x += local_particles[i].vx * DT;
             local_particles[i].y += local_particles[i].vy * DT;
             local_particles[i].z += local_particles[i].vz * DT;
         }
+
+        double elapsed = MPI_Wtime() - step_start;
+        total_time += elapsed;
+
+        if (rank == 0 && step % 20 == 0) {
+            printf("Step %3d   time: %.4f s\n", step, elapsed);
+        }
     }
 
-    double end_time = MPI_Wtime();
-
     MPI_Gather(local_particles, local_n, MPI_PARTICLE,
-               all_particles, local_n, MPI_PARTICLE,
-               0, MPI_COMM_WORLD);
+               all_particles, local_n, MPI_PARTICLE, 0, MPI_COMM_WORLD);
 
     if (rank == 0) {
-        printf("MPI Execution Time with %d processes: %f seconds\n", size, end_time - start_time);
-        save_particles("results/final_particles_mpi.txt", all_particles, N);
+        printf("\nTotal simulation time : %.4f seconds\n", total_time);
+        printf("Average time/step     : %.6f seconds\n", total_time / STEPS);
+        save_particles(FINAL_FILE, all_particles, N);
     }
 
     MPI_Type_free(&MPI_PARTICLE);

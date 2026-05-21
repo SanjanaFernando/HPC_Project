@@ -10,7 +10,7 @@
 #define DT 0.01f        // time step
 #define G 1.0f          // gravitational constant (can be 1 in normalized units)
 #define STEPS 100       // number of time steps (increase for longer sim)
-#define INITIAL_FILE "initial_particles.txt"
+#define INITIAL_FILE "inputs/initial_particles.txt"
 #define SEED 42u
 
 int loadParticles(const char *filename, Particle *particles, int n) {
@@ -110,7 +110,7 @@ int main() {
         }
     }
 
-    FILE *fp = fopen("initial_particles_sequential.txt", "w");
+    FILE *fp = fopen("inputs/initial_particles_sequential.txt", "w");
     if (fp) {
         for (int i = 0; i < N; i++) {
             fprintf(fp, "%.6f %.6f %.6f %.6f %.6f %.6f %.6f\n",
@@ -141,7 +141,7 @@ int main() {
         double elapsed = ((double)(end - start)) / CLOCKS_PER_SEC;
         total_time += elapsed;
 
-        if (step % 10 == 0) {
+        if (step % 20 == 0) {
             printf("Step %d: %.4f seconds\n", step, elapsed);
         }
     }
