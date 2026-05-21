@@ -5,10 +5,10 @@ Usage:
   python3 plot_performance.py --csv results/performance_summary.csv --outdir results
 
 Outputs:
-  - results/performance_total.png
-  - results/performance_average.png
-  - results/performance_speedup.png
-    - results/performance_steps.png
+  - results/performance/total.png
+  - results/erformance/average.png
+  - results/performance/speedup.png
+    - results/performance/steps.png
 """
 import argparse
 import csv

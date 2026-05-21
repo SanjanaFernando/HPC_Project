@@ -96,3 +96,6 @@ Results
 
 - Sequential final state: `results/final_particles_sequential.txt`
 - OpenMP final state: `results/final_particles_openmp.txt`
+
+Performance Plotting
+python plot_performance.py --csv results/performance_summary.csv --outdir results/performance
