@@ -105,7 +105,9 @@ void bodyForceSoA(float *x, float *y, float *z, float *mass,
     }
 }
 
-int main() {
+int main(int argc, char **argv) {
+    const char *output_file = (argc > 1) ? argv[1] : "results/final_particles_openmp.txt";
+
     // Allocate Particle array for loading/generation then convert to SoA
     Particle *particles = (Particle *) malloc(N * sizeof(Particle));
     if (!particles) {
@@ -198,7 +200,7 @@ int main() {
     printf("Average time/step     : %.6f seconds\n", total_time / STEPS);
 
     // Save final state (from SoA)
-    fp = fopen("results/final_particles_openmp.txt", "w");
+    fp = fopen(output_file, "w");
     if (fp) {
         for (int i = 0; i < N; i++) {
             fprintf(fp, "%.6f %.6f %.6f %.6f %.6f %.6f %.6f\n",

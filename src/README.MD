@@ -97,12 +97,18 @@ chmod +x ./run_all.sh
 ./run_all.sh -t 8 -p 4
 ```
 
+To generate an OpenMP scaling graph, sweep several thread counts:
+
+```bash
+./run_all.sh --omp-sweep 1,2,4,8 --skip-mpi --skip-cuda
+```
+
 Useful flags:
 
 ```bash
 ./run_all.sh --skip-mpi
 ./run_all.sh --skip-cuda
-./run_all.sh --clean
+./run_all.sh --omp-sweep 1,2,4,8
 ```
 
 The script writes:
@@ -118,7 +124,7 @@ If CUDA tools are available, it also benchmarks `nbody_cuda_mpi.cu` and saves `r
 Generate PNG charts from the benchmark output:
 
 ```bash
-python plot_performance.py --csv results/performance_summary.csv --logsdir results/logs --outdir results
+python plot_performance.py --csv results/performance_summary.csv --logsdir results/logs --outdir results/performance
 ```
 
 This creates:
@@ -127,6 +133,7 @@ This creates:
 - `results/performance_average.png`
 - `results/performance_speedup.png`
 - `results/performance_steps.png`
+- `results/performance_openmp_scaling.png`
 
 ## Notes
 
@@ -134,3 +141,5 @@ This creates:
 - The per-step log output is printed every 20 steps for the sequential and OpenMP versions, and every 20 steps in the MPI version.
 - The CUDA + MPI version prints step timings from rank 0 and writes the final output to `results/final_particles_cuda_mpi.txt`.
 - On some OpenMPI setups in WSL, running as root requires `--allow-run-as-root`, which is already handled by `run_all.sh`.
+
+run_all.sh --omp-sweep 1,2,4,8 --skip-mpi --skip-cuda

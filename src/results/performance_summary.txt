@@ -1,13 +1,13 @@
 Performance comparison (lower is faster)
 Program      Total(s)    Avg(s)      OutputBytes
 ------------------------------------------------
-CUDA_MPI     0.4573     0.004573   670603
-OpenMP       4.7213     0.047213   843259
-MPI          18.9518    0.189518   819325
-Sequential   44.8414    0.448414   843259
+CUDA_MPI             0.4218     0.004218   670603
+OpenMP (8 threads)   4.2120     0.042120   843259
+MPI                  19.9401    0.199401   819325
+Sequential           100.8755   1.008755   843259
 
 Speedup vs Sequential
-CUDA_MPI     98.06x
-OpenMP       9.50x
-MPI          2.37x
-Sequential   1.00x
+CUDA_MPI             239.15x
+OpenMP (8 threads)   23.95x
+MPI                  5.06x
+Sequential           1.00x

@@ -2,17 +2,19 @@
 set -euo pipefail
 
 OPENMP_THREADS=8
+OPENMP_SWEEP=""
 MPI_PROCESSES=4
 SKIP_MPI=0
 SKIP_CUDA=0
 
 usage() {
     cat <<'EOF'
-Usage: ./run_all.sh [-t threads] [-p processes] [--skip-mpi] [--skip-cuda]
+Usage: ./run_all.sh [-t threads] [-p processes] [--omp-sweep list] [--skip-mpi] [--skip-cuda]
 
 Options:
   -t, --threads     OpenMP thread count (default: 8)
   -p, --processes   MPI process count (default: 4)
+      --omp-sweep   Comma-separated OpenMP thread list, e.g. 1,2,4,8
       --skip-mpi    Build and run only sequential + OpenMP
     --skip-cuda   Skip CUDA + MPI build and run
 EOF
@@ -26,6 +28,10 @@ while [[ $# -gt 0 ]]; do
             ;;
         -p|--processes)
             MPI_PROCESSES="${2:?Missing value for $1}"
+            shift 2
+            ;;
+        --omp-sweep)
+            OPENMP_SWEEP="${2:?Missing value for $1}"
             shift 2
             ;;
         --skip-mpi)
@@ -87,8 +93,9 @@ extract_metric() {
 
 record_result() {
     local program="$1"
-    local log_path="$2"
-    local output_path="$3"
+    local threads="$2"
+    local log_path="$3"
+    local output_path="$4"
 
     local total_seconds average_seconds output_exists output_bytes output_hash
     total_seconds="$(extract_metric 'Total simulation time' "$log_path" || true)"
@@ -104,8 +111,9 @@ record_result() {
         output_hash=""
     fi
 
-    printf '%s,%s,%s,%s,%s,%s,%s,%s\n' \
+    printf '%s,%s,%s,%s,%s,%s,%s,%s,%s\n' \
         "$program" \
+        "$threads" \
         "$total_seconds" \
         "$average_seconds" \
         "$output_exists" \
@@ -126,6 +134,12 @@ seq_bin="nbody_seq_bench"
 omp_bin="nbody_omp_bench"
 mpi_bin="nbody_mpi_bench"
 cuda_bin="nbody_cuda_mpi_bench"
+
+if [[ -n "$OPENMP_SWEEP" ]]; then
+    IFS=',' read -r -a omp_thread_list <<< "$OPENMP_SWEEP"
+else
+    omp_thread_list=("$OPENMP_THREADS")
+fi
 
 rm -f "$script_root/$seq_bin" "$script_root/$omp_bin" "$script_root/$mpi_bin" "$script_root/$cuda_bin" || true
 
@@ -157,30 +171,49 @@ cuda_log="$log_dir/cuda_mpi.log"
 summary_csv="$results_dir/performance_summary.csv"
 summary_txt="$results_dir/performance_summary.txt"
 
-printf 'Program,TotalSeconds,AverageSeconds,OutputExists,OutputBytes,OutputHash,LogFile,OutputFile\n' > "$summary_csv"
+printf 'Program,Threads,TotalSeconds,AverageSeconds,OutputExists,OutputBytes,OutputHash,LogFile,OutputFile\n' > "$summary_csv"
 : > "$summary_txt"
 
 printf 'Running sequential...\n'
 run_and_log "$seq_log" "$script_root/$seq_bin"
-printf 'Running OpenMP with %s threads...\n' "$OPENMP_THREADS"
-OMP_NUM_THREADS="$OPENMP_THREADS" run_and_log "$omp_log" "$script_root/$omp_bin"
 
-seq_record="$(record_result 'Sequential' "$seq_log" "$results_dir/final_particles_sequential.txt")"
-omp_record="$(record_result 'OpenMP' "$omp_log" "$results_dir/final_particles_openmp.txt")"
-printf '%s\n%s\n' "$seq_record" "$omp_record" >> "$summary_csv"
+seq_record="$(record_result 'Sequential' '' "$seq_log" "$results_dir/final_particles_sequential.txt")"
+printf '%s\n' "$seq_record" >> "$summary_csv"
+
+for threads in "${omp_thread_list[@]}"; do
+    if [[ "$threads" =~ ^[0-9]+$ ]] && [[ "$threads" -gt 0 ]]; then
+        :
+    else
+        echo "Invalid OpenMP thread count: $threads" >&2
+        exit 1
+    fi
+
+    if [[ ${#omp_thread_list[@]} -eq 1 && -z "$OPENMP_SWEEP" ]]; then
+        omp_log="$log_dir/openmp.log"
+        omp_output="$results_dir/final_particles_openmp.txt"
+    else
+        omp_log="$log_dir/openmp_t${threads}.log"
+        omp_output="$results_dir/final_particles_openmp_t${threads}.txt"
+    fi
+
+    printf 'Running OpenMP with %s threads...\n' "$threads"
+    OMP_NUM_THREADS="$threads" run_and_log "$omp_log" "$script_root/$omp_bin" "$omp_output"
+    omp_record="$(record_result 'OpenMP' "$threads" "$omp_log" "$omp_output")"
+    printf '%s\n' "$omp_record" >> "$summary_csv"
+done
 
 if [[ "$SKIP_MPI" -eq 0 ]]; then
     printf 'Running MPI with %s processes...\n' "$MPI_PROCESSES"
     # Allow running as root inside some WSL/OpenMPI setups
     run_and_log "$mpi_log" mpirun --allow-run-as-root -np "$MPI_PROCESSES" "$script_root/$mpi_bin"
-    mpi_record="$(record_result 'MPI' "$mpi_log" "$results_dir/final_particles_mpi.txt")"
+    mpi_record="$(record_result 'MPI' '' "$mpi_log" "$results_dir/final_particles_mpi.txt")"
     printf '%s\n' "$mpi_record" >> "$summary_csv"
 fi
 
 if [[ "$cuda_available" -eq 1 ]]; then
     printf 'Running CUDA + MPI with %s processes...\n' "$MPI_PROCESSES"
     run_and_log "$cuda_log" mpirun --allow-run-as-root -np "$MPI_PROCESSES" "$script_root/$cuda_bin"
-    cuda_record="$(record_result 'CUDA_MPI' "$cuda_log" "$results_dir/final_particles_cuda_mpi.txt")"
+    cuda_record="$(record_result 'CUDA_MPI' '' "$cuda_log" "$results_dir/final_particles_cuda_mpi.txt")"
     printf '%s\n' "$cuda_record" >> "$summary_csv"
 fi
 
@@ -204,6 +237,10 @@ with csv_path.open(newline='') as handle:
             row['AverageSecondsValue'] = float(row['AverageSeconds'])
         except (TypeError, ValueError):
             row['AverageSecondsValue'] = float('inf')
+        row['DisplayProgram'] = row['Program']
+        threads = (row.get('Threads') or '').strip()
+        if row['Program'] == 'OpenMP' and threads:
+            row['DisplayProgram'] = f"OpenMP ({threads} threads)"
         rows.append(row)
 
 rows_sorted = sorted(rows, key=lambda item: item['TotalSecondsValue'])
@@ -217,14 +254,14 @@ with txt_path.open('w', encoding='utf-8') as handle:
         total = row['TotalSeconds'] if row['TotalSeconds'] else 'n/a'
         avg = row['AverageSeconds'] if row['AverageSeconds'] else 'n/a'
         size = row['OutputBytes'] if row['OutputBytes'] else 'n/a'
-        handle.write(f"{row['Program']:<12} {total:<10} {avg:<10} {size}\n")
+        handle.write(f"{row['DisplayProgram']:<20} {total:<10} {avg:<10} {size}\n")
 
     if baseline is not None:
         handle.write('\nSpeedup vs Sequential\n')
         for row in rows_sorted:
             if row['TotalSecondsValue'] != float('inf') and row['TotalSecondsValue'] > 0:
                 speedup = baseline['TotalSecondsValue'] / row['TotalSecondsValue']
-                handle.write(f"{row['Program']:<12} {speedup:.2f}x\n")
+                handle.write(f"{row['DisplayProgram']:<20} {speedup:.2f}x\n")
 PY
 
 printf '\nPerformance summary saved to %s\n' "$summary_csv"

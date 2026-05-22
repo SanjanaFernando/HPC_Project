@@ -31,13 +31,17 @@ def read_csv(path):
     with path.open(newline="", encoding="utf-8") as handle:
         reader = csv.DictReader(handle)
         for row in reader:
+            threads_raw = (row.get("Threads") or "").strip()
             total_raw = (row.get("TotalSeconds") or "").strip()
             average_raw = (row.get("AverageSeconds") or "").strip()
+            threads_val = int(threads_raw) if threads_raw.isdigit() else None
             total_val = float(total_raw) if total_raw else float("nan")
             average_val = float(average_raw) if average_raw else float("nan")
             rows.append(
                 {
                     "Program": (row.get("Program") or "").strip() or "Unknown",
+                    "Threads": threads_raw,
+                    "ThreadsVal": threads_val,
                     "TotalSeconds": total_raw,
                     "AverageSeconds": average_raw,
                     "TotalSecondsVal": total_val,
@@ -45,6 +49,12 @@ def read_csv(path):
                 }
             )
     return rows
+
+
+def display_program(row):
+    if row["Program"] == "OpenMP" and row.get("Threads"):
+        return f"OpenMP ({row['Threads']} threads)"
+    return row["Program"]
 
 
 def read_step_logs(log_dir):
@@ -96,7 +106,7 @@ def plot_total(df, outpath):
     import matplotlib.pyplot as plt
 
     df_plot = sorted(df, key=lambda item: (math.inf if math.isnan(item["TotalSecondsVal"]) else item["TotalSecondsVal"]))
-    programs = [item["Program"] for item in df_plot]
+    programs = [display_program(item) for item in df_plot]
     values = [item["TotalSecondsVal"] for item in df_plot]
 
     plt.figure(figsize=(8, 4.5))
@@ -117,7 +127,7 @@ def plot_average(df, outpath):
     import matplotlib.pyplot as plt
 
     df_plot = sorted(df, key=lambda item: (math.inf if math.isnan(item["AverageSecondsVal"]) else item["AverageSecondsVal"]))
-    programs = [item["Program"] for item in df_plot]
+    programs = [display_program(item) for item in df_plot]
     values = [item["AverageSecondsVal"] for item in df_plot]
 
     plt.figure(figsize=(8, 4.5))
@@ -146,7 +156,7 @@ def plot_speedup(df, outpath):
         numeric_rows = [item for item in df if not math.isnan(item["TotalSecondsVal"])]
         baseline = min((item["TotalSecondsVal"] for item in numeric_rows), default=None)
 
-    programs = [item["Program"] for item in df]
+    programs = [display_program(item) for item in df]
     vals = []
     for item in df:
         v = item["TotalSecondsVal"]
@@ -170,6 +180,52 @@ def plot_speedup(df, outpath):
     plt.tight_layout()
     plt.savefig(outpath, dpi=150)
     plt.close()
+
+
+def plot_openmp_scaling(df, outpath):
+    import matplotlib.pyplot as plt
+
+    openmp_rows = [
+        item for item in df
+        if item["Program"] == "OpenMP" and item.get("ThreadsVal") is not None and not math.isnan(item["TotalSecondsVal"])
+    ]
+    if len(openmp_rows) < 2:
+        return False
+
+    openmp_rows = sorted(openmp_rows, key=lambda item: item["ThreadsVal"])
+    threads = [item["ThreadsVal"] for item in openmp_rows]
+    total_seconds = [item["TotalSecondsVal"] for item in openmp_rows]
+
+    baseline_row = next((item for item in df if item["Program"] == "Sequential" and not math.isnan(item["TotalSecondsVal"])), None)
+    speedups = []
+    if baseline_row is not None and baseline_row["TotalSecondsVal"] > 0:
+        baseline = baseline_row["TotalSecondsVal"]
+        speedups = [baseline / value if value > 0 else float("nan") for value in total_seconds]
+
+    fig, axes = plt.subplots(1, 2 if speedups else 1, figsize=(10, 4.8), squeeze=False)
+    axes = axes[0]
+
+    axes[0].plot(threads, total_seconds, marker="o", linewidth=2, color="#55A868")
+    axes[0].set_xlabel("OpenMP threads")
+    axes[0].set_ylabel("Total seconds")
+    axes[0].set_title("OpenMP runtime vs thread count")
+    axes[0].grid(True, linestyle="--", alpha=0.35)
+    for x, y in zip(threads, total_seconds):
+        axes[0].text(x, y, f"{y:.3f}", ha="center", va="bottom")
+
+    if speedups:
+        axes[1].plot(threads, speedups, marker="o", linewidth=2, color="#4C72B0")
+        axes[1].set_xlabel("OpenMP threads")
+        axes[1].set_ylabel("Speedup vs Sequential")
+        axes[1].set_title("OpenMP speedup vs thread count")
+        axes[1].grid(True, linestyle="--", alpha=0.35)
+        for x, y in zip(threads, speedups):
+            axes[1].text(x, y, f"{y:.2f}x", ha="center", va="bottom")
+
+    plt.tight_layout()
+    plt.savefig(outpath, dpi=150)
+    plt.close()
+    return True
 
 
 def plot_steps(step_series, outpath):
@@ -229,15 +285,21 @@ def main():
     avg_png = outdir / 'performance_average.png'
     speed_png = outdir / 'performance_speedup.png'
     steps_png = outdir / 'performance_steps.png'
+    omp_png = outdir / 'performance_openmp_scaling.png'
 
     plot_total(df, total_png)
     plot_average(df, avg_png)
     plot_speedup(df, speed_png)
     plot_steps(step_series, steps_png)
+    omp_generated = plot_openmp_scaling(df, omp_png)
 
     outputs = [total_png, avg_png, speed_png]
     if step_series:
         outputs.append(steps_png)
+    if omp_generated:
+        outputs.append(omp_png)
+    elif any(item["Program"] == "OpenMP" and item.get("ThreadsVal") is not None for item in df):
+        print("OpenMP scaling plot was not generated because only one thread count was present. Run with --omp-sweep 1,2,4,8 (or similar) to create it.")
     print("\n".join(f"Wrote: {path}" for path in outputs))
 
 

@@ -6,11 +6,11 @@ Threads         : 8
 Softening       : 1.0e-09
 Time step (dt)  : 0.010
 
-Step   0   time: 0.0316 s
-Step  20   time: 0.0408 s
-Step  40   time: 0.0448 s
-Step  60   time: 0.0334 s
-Step  80   time: 0.1041 s
+Step   0   time: 0.1163 s
+Step  20   time: 0.0386 s
+Step  40   time: 0.0420 s
+Step  60   time: 0.0388 s
+Step  80   time: 0.0375 s
 
-Total simulation time : 4.7213 seconds
-Average time/step     : 0.047213 seconds
+Total simulation time : 4.2120 seconds
+Average time/step     : 0.042120 seconds
