@@ -3,8 +3,7 @@
 #include <stdlib.h>
 #include <math.h>
 #include <time.h>
-
-#include "particle.h"  // or define struct here
+#include "../common/particle.h" // or define struct here
 
 #define N 10240          // start small, later increase to 4096, 8192, etc.
 #define SOFTENING 1e-9f // avoid division by zero / singularity

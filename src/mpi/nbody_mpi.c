@@ -2,7 +2,7 @@
 #include <stdlib.h>
 #include <math.h>
 #include <mpi.h>
-#include "particle.h"
+#include "../common/particle.h"
 
 #define N 10240
 #define STEPS 100

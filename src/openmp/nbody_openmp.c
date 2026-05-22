@@ -3,8 +3,7 @@
 #include <math.h>
 #include <time.h>
 #include <omp.h>
-
-#include "particle.h"
+#include "../common/particle.h"
 
 #define N          10240       // Number of particles (adjust: 1024, 4096, 8192, 16384...)
 #define SOFTENING  1e-9f      // Softening parameter to avoid singularity

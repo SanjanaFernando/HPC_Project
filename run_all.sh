@@ -130,21 +130,21 @@ cuda_bin="nbody_cuda_mpi_bench"
 rm -f "$script_root/$seq_bin" "$script_root/$omp_bin" "$script_root/$mpi_bin" "$script_root/$cuda_bin" || true
 
 # Compile sequential
-compile_program gcc "$seq_bin" -O2 -o "$script_root/$seq_bin" nbody_sequential.c -lm
+compile_program gcc "$seq_bin" -O2 -o "$script_root/$seq_bin" src/sequential/nbody_sequential.c -lm
 
 # Compile OpenMP
-compile_program gcc "$omp_bin" -O2 -fopenmp -o "$script_root/$omp_bin" nbody_openmp.c -lm
+compile_program gcc "$omp_bin" -O2 -fopenmp -o "$script_root/$omp_bin" src/openmp/nbody_openmp.c -lm
 
 if [[ "$SKIP_MPI" -eq 0 ]]; then
     # Compile MPI (place output path explicitly to avoid filename collisions)
-    compile_program mpicc "$mpi_bin" -O2 -o "$script_root/$mpi_bin" nbody_mpi.c -lm
+    compile_program mpicc "$mpi_bin" -O2 -o "$script_root/$mpi_bin" src/mpi/nbody_mpi.c -lm
 fi
 
 cuda_available=0
 if [[ "$SKIP_CUDA" -eq 0 ]]; then
     if command -v nvcc >/dev/null 2>&1 && command -v mpicxx >/dev/null 2>&1; then
         cuda_available=1
-        compile_program nvcc "$cuda_bin" -O2 -ccbin mpicxx -o "$script_root/$cuda_bin" nbody_cuda_mpi.cu
+        compile_program nvcc "$cuda_bin" -O2 -ccbin mpicxx -o "$script_root/$cuda_bin" src/cuda_mpi/nbody_cuda_mpi.cu
     else
         echo "Skipping CUDA + MPI build: nvcc and/or mpicxx not found in PATH." >&2
     fi

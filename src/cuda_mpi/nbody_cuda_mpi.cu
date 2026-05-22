@@ -16,8 +16,7 @@
 #include <time.h>
 #include <mpi.h>
 #include <cuda_runtime.h>
-
-#include "particle.h"
+#include "../common/particle.h"
 
 #define N            10240
 #define SOFTENING    1e-9f
@@ -242,7 +241,7 @@ int main(int argc, char **argv) {
         double elapsed = t1 - t0;
         total_time += elapsed;
 
-        if (rank == 0 && step % 10 == 0)
+        if (rank == 0 && step % 20 == 0)
             printf("Step %d: %.4f seconds\n", step, elapsed);
     }
 

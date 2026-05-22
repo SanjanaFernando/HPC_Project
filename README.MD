@@ -4,11 +4,11 @@ This project contains multiple implementations of the same direct $O(N^2)$ gravi
 
 ## Files
 
-- `nbody_sequential.c` - sequential baseline
-- `nbody_openmp.c` - OpenMP shared-memory version
-- `nbody_mpi.c` - MPI version
-- `nbody_cuda_mpi.cu` - CUDA + MPI version
-- `particle.h` - shared particle structure
+- `src/sequential/nbody_sequential.c` - sequential baseline
+- `src/openmp/nbody_openmp.c` - OpenMP shared-memory version
+- `src/mpi/nbody_mpi.c` - MPI version
+- `src/cuda_mpi/nbody_cuda_mpi.cu` - CUDA + MPI version
+- `src/common/particle.h` - shared particle structure
 - `run_all.sh` - WSL/Linux benchmark script
 - `plot_performance.py` - generates benchmark charts from the saved logs and summary CSV
 
@@ -29,30 +29,30 @@ Each backend writes its final state to `results/`:
 
 ## Build
 
-All commands below assume the current directory is this `src/` folder.
+All commands below assume the current directory is the repository root.
 
 ### Linux / WSL
 
 ```bash
-gcc -O2 -o nbody_seq nbody_sequential.c -lm
-gcc -O3 -fopenmp -o nbody_omp nbody_openmp.c -lm
-mpicc -O2 -o nbody_mpi nbody_mpi.c -lm
-nvcc -O2 -ccbin mpicxx -o nbody_cuda_mpi nbody_cuda_mpi.cu
+gcc -O2 -o nbody_seq src/sequential/nbody_sequential.c -lm
+gcc -O3 -fopenmp -o nbody_omp src/openmp/nbody_openmp.c -lm
+mpicc -O2 -o nbody_mpi src/mpi/nbody_mpi.c -lm
+nvcc -O2 -ccbin mpicxx -o nbody_cuda_mpi src/cuda_mpi/nbody_cuda_mpi.cu
 ```
 
 If `nvcc -ccbin mpicxx` does not work on your system, try:
 
 ```bash
 mpicxx -O2 -I/usr/local/cuda/include -L/usr/local/cuda/lib64 -lcudart \
-    -o nbody_cuda_mpi nbody_cuda_mpi.cu
+    -o nbody_cuda_mpi src/cuda_mpi/nbody_cuda_mpi.cu
 ```
 
 ### Windows (PowerShell / MinGW)
 
 ```powershell
-gcc -O2 -o nbody_seq.exe nbody_sequential.c -lm
-gcc -O2 -fopenmp -o nbody_omp.exe nbody_openmp.c -lm
-mpicc -O2 -o nbody_mpi.exe nbody_mpi.c -lm
+gcc -O2 -o nbody_seq.exe src/sequential/nbody_sequential.c -lm
+gcc -O2 -fopenmp -o nbody_omp.exe src/openmp/nbody_openmp.c -lm
+mpicc -O2 -o nbody_mpi.exe src/mpi/nbody_mpi.c -lm
 ```
 
 CUDA + MPI is recommended from WSL on Windows.
@@ -111,7 +111,7 @@ The script writes:
 - `results/performance_summary.csv`
 - `results/performance_summary.txt`
 
-If CUDA tools are available, it also benchmarks `nbody_cuda_mpi.cu` and saves `results/final_particles_cuda_mpi.txt`.
+If CUDA tools are available, it also benchmarks `src/cuda_mpi/nbody_cuda_mpi.cu` and saves `results/final_particles_cuda_mpi.txt`.
 
 ## Charts
 
