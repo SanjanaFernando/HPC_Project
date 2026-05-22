@@ -137,3 +137,4 @@ This creates:
 - The CUDA + MPI version prints step timings from rank 0 and writes the final output to `results/final_particles_cuda_mpi_bs<block_size>.txt`.
 - Use `./run_all.sh --cuda-block-sizes 64,128,256,512` to benchmark several CUDA block sizes and generate the block-size performance chart.
 - On some OpenMPI setups in WSL, running as root requires `--allow-run-as-root`, which is already handled by `run_all.sh`.
+  ./run_all.sh --skip-mpi --skip-openmp --cuda-block-sizes 64,128,256,512
