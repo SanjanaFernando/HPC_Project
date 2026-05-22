@@ -26,7 +26,7 @@
 #define STEPS        100
 #define INITIAL_FILE "inputs/initial_particles.txt"
 #define SEED         42u
-#define BLOCK_SIZE   128
+#define DEFAULT_BLOCK_SIZE   128
 
 // ---- tiny CUDA error helper ---------------------------------------------------
 #define CUDA_CHECK(call) do {                                                  \
@@ -146,6 +146,24 @@ int main(int argc, char **argv) {
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
     MPI_Comm_size(MPI_COMM_WORLD, &size);
 
+    int block_size = DEFAULT_BLOCK_SIZE;
+    for (int i = 1; i < argc; i++) {
+        if (strcmp(argv[i], "--block-size") == 0 || strcmp(argv[i], "-b") == 0) {
+            if (i + 1 >= argc) {
+                if (rank == 0) fprintf(stderr, "Missing value for %s\n", argv[i]);
+                MPI_Abort(MPI_COMM_WORLD, 1);
+            }
+            block_size = atoi(argv[++i]);
+        } else if (strncmp(argv[i], "--block-size=", 13) == 0) {
+            block_size = atoi(argv[i] + 13);
+        }
+    }
+
+    if (block_size <= 0) {
+        if (rank == 0) fprintf(stderr, "Block size must be a positive integer.\n");
+        MPI_Abort(MPI_COMM_WORLD, 1);
+    }
+
     if (N % size != 0) {
         if (rank == 0)
             fprintf(stderr, "N (%d) must be divisible by number of ranks (%d)\n", N, size);
@@ -207,12 +225,13 @@ int main(int argc, char **argv) {
         printf("Steps           : %d\n", STEPS);
         printf("MPI ranks       : %d  (1 GPU per rank)\n", size);
         printf("Local per rank  : %d\n", local_n);
+        printf("Block size      : %d\n", block_size);
         printf("Rank 0 GPU      : %s\n", prop.name);
         printf("Softening       : %.1e\n", SOFTENING);
         printf("Time step (dt)  : %.3f\n\n", DT);
     }
 
-    int blocks = (local_n + BLOCK_SIZE - 1) / BLOCK_SIZE;
+    int blocks = (local_n + block_size - 1) / block_size;
     double total_time = 0.0;
 
     for (int step = 0; step < STEPS; step++) {
@@ -220,10 +239,10 @@ int main(int argc, char **argv) {
         double t0 = MPI_Wtime();
 
         // Forces on owned particles.
-        bodyForceKernel<<<blocks, BLOCK_SIZE>>>(d_pos, d_vel, first_idx, local_n, N);
+        bodyForceKernel<<<blocks, block_size>>>(d_pos, d_vel, first_idx, local_n, N);
 
         // Position update for owned particles (writes into global slice).
-        positionUpdateKernel<<<blocks, BLOCK_SIZE>>>(d_pos, d_vel, first_idx, local_n);
+        positionUpdateKernel<<<blocks, block_size>>>(d_pos, d_vel, first_idx, local_n);
         CUDA_CHECK(cudaDeviceSynchronize());
 
         // Bring owned positions back to host, Allgather so every rank has the
@@ -287,7 +306,10 @@ int main(int argc, char **argv) {
         }
         printf("Checksum: sum(pos) = %.6e   sum(vel) = %.6e\n", sum_x, sum_v);
 
-        FILE *fp = fopen("results/final_particles_cuda_mpi.txt", "w");
+        char output_path[256];
+        snprintf(output_path, sizeof(output_path),
+                 "results/final_particles_cuda_mpi_bs%d.txt", block_size);
+        FILE *fp = fopen(output_path, "w");
         if (fp) {
             for (int i = 0; i < N; i++) {
                 fprintf(fp, "%.6f %.6f %.6f %.6f %.6f %.6f %.6f\n",
@@ -297,7 +319,7 @@ int main(int argc, char **argv) {
             }
             fclose(fp);
         } else {
-            fprintf(stderr, "Warning: could not open results/final_particles_cuda_mpi.txt\n");
+            fprintf(stderr, "Warning: could not open %s\n", output_path);
         }
     }
 

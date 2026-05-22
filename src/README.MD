@@ -112,6 +112,7 @@ The script writes:
 - `results/performance_summary.txt`
 
 If CUDA tools are available, it also benchmarks `nbody_cuda_mpi.cu` and saves `results/final_particles_cuda_mpi.txt`.
+When block-size sweeps are enabled, CUDA runs are saved as `results/final_particles_cuda_mpi_bs*.txt`.
 
 ## Charts
 
@@ -126,11 +127,13 @@ This creates:
 - `results/performance_total.png`
 - `results/performance_average.png`
 - `results/performance_speedup.png`
+- `results/performance_cuda_block_sizes.png`
 - `results/performance_steps.png`
 
 ## Notes
 
 - `N`, `STEPS`, `DT`, and `SOFTENING` are defined at the top of each source file.
 - The per-step log output is printed every 20 steps for the sequential and OpenMP versions, and every 20 steps in the MPI version.
-- The CUDA + MPI version prints step timings from rank 0 and writes the final output to `results/final_particles_cuda_mpi.txt`.
+- The CUDA + MPI version prints step timings from rank 0 and writes the final output to `results/final_particles_cuda_mpi_bs<block_size>.txt`.
+- Use `./run_all.sh --cuda-block-sizes 64,128,256,512` to benchmark several CUDA block sizes and generate the block-size performance chart.
 - On some OpenMPI setups in WSL, running as root requires `--allow-run-as-root`, which is already handled by `run_all.sh`.
