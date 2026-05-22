@@ -61,26 +61,39 @@ int main(int argc, char *argv[]) {
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
     MPI_Comm_size(MPI_COMM_WORLD, &size);
 
-    if (N % size != 0) {
+    int *counts = malloc(size * sizeof(int));
+    int *displs = malloc(size * sizeof(int));
+    if (!counts || !displs) {
         if (rank == 0)
-            fprintf(stderr, "Error: N (%d) must be divisible by processes (%d)\n", N, size);
+            fprintf(stderr, "Memory allocation failed for scatter/gather arrays\n");
         MPI_Finalize();
         return 1;
     }
 
-    int local_n = N / size;
+    int base = N / size;
+    int rem = N % size;
+    int offset = 0;
+    for (int i = 0; i < size; i++) {
+        counts[i] = base + (i < rem ? 1 : 0);
+        displs[i] = offset;
+        offset += counts[i];
+    }
+
+    int local_n = counts[rank];
 
     Particle *all_particles  = malloc(N * sizeof(Particle));
     Particle *local_particles = malloc(local_n * sizeof(Particle));
 
     if (!all_particles || !local_particles) {
         fprintf(stderr, "Memory allocation failed on rank %d\n", rank);
+        free(counts);
+        free(displs);
         MPI_Finalize();
         return 1;
     }
 
     MPI_Datatype MPI_PARTICLE;
-    MPI_Type_contiguous(7, MPI_FLOAT, &MPI_PARTICLE);
+    MPI_Type_contiguous(8, MPI_FLOAT, &MPI_PARTICLE);
     MPI_Type_commit(&MPI_PARTICLE);
 
     /* Root loads or generates initial data */
@@ -92,8 +105,8 @@ int main(int argc, char *argv[]) {
         save_particles(INITIAL_SNAPSHOT_FILE, all_particles, N);
     }
 
-    MPI_Scatter(all_particles, local_n, MPI_PARTICLE,
-                local_particles, local_n, MPI_PARTICLE, 0, MPI_COMM_WORLD);
+    MPI_Scatterv(all_particles, counts, displs, MPI_PARTICLE,
+                 local_particles, local_n, MPI_PARTICLE, 0, MPI_COMM_WORLD);
 
     if (rank == 0) {
         printf("MPI N-body simulation (optimized v2)\n");
@@ -110,9 +123,9 @@ int main(int argc, char *argv[]) {
     for (int step = 0; step < STEPS; step++) {
         double step_start = MPI_Wtime();
 
-        MPI_Allgather(local_particles, local_n, MPI_PARTICLE,
-                      all_particles,  local_n, MPI_PARTICLE,
-                      MPI_COMM_WORLD);
+        MPI_Allgatherv(local_particles, local_n, MPI_PARTICLE,
+                       all_particles, counts, displs, MPI_PARTICLE,
+                       MPI_COMM_WORLD);
 
         /* Force calculation */
         for (int i = 0; i < local_n; i++) {
@@ -155,8 +168,8 @@ int main(int argc, char *argv[]) {
         }
     }
 
-    MPI_Gather(local_particles, local_n, MPI_PARTICLE,
-               all_particles, local_n, MPI_PARTICLE, 0, MPI_COMM_WORLD);
+    MPI_Gatherv(local_particles, local_n, MPI_PARTICLE,
+                all_particles, counts, displs, MPI_PARTICLE, 0, MPI_COMM_WORLD);
 
     if (rank == 0) {
         printf("\nTotal simulation time : %.4f seconds\n", total_time);
@@ -167,6 +180,8 @@ int main(int argc, char *argv[]) {
     MPI_Type_free(&MPI_PARTICLE);
     free(local_particles);
     free(all_particles);
+    free(counts);
+    free(displs);
 
     MPI_Finalize();
     return 0;
