@@ -4,9 +4,10 @@ set -euo pipefail
 script_root="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$script_root"
 
+bin_dir="$script_root/bin"
 results_dir="$script_root/results"
 log_dir="$results_dir/logs"
-mkdir -p "$results_dir" "$log_dir"
+mkdir -p "$bin_dir" "$results_dir" "$log_dir"
 
 require_command() {
     local cmd="$1"
@@ -23,7 +24,7 @@ require_command python3
 processors="${1:-1,2,3,4}"
 IFS=',' read -r -a proc_list <<< "$processors"
 
-mpi_bin="$script_root/nbody_mpi_sweep"
+mpi_bin="$bin_dir/nbody_mpi_sweep"
 
 printf 'Compiling MPI binary from src/mpi/nbody_mpi.c...\n'
 mpicc -O2 -o "$mpi_bin" src/mpi/nbody_mpi.c -lm
