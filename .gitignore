@@ -1,0 +1,26 @@
+.vscode
+# Generated input files (regenerated from SEED on first run if absent)
+initial_particles.txt
+inputs/
+
+# Simulation outputs
+results/
+
+# Compiled binaries
+nbody_seq
+nbody_omp
+nbody_cuda_mpi
+nbody_seq.exe
+nbody_omp.exe
+nbody_cuda_mpi.exe
+
+# Object files / build artefacts
+*.o
+*.obj
+
+# Editor/IDE noise
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
