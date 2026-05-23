@@ -34,10 +34,11 @@ All commands below assume the current directory is the repository root.
 ### Linux / WSL
 
 ```bash
-gcc -O2 -o nbody_seq src/sequential/nbody_sequential.c -lm
-gcc -O3 -fopenmp -o nbody_omp src/openmp/nbody_openmp.c -lm
-mpicc -O2 -o nbody_mpi src/mpi/nbody_mpi.c -lm
-nvcc -O2 -ccbin mpicxx -o nbody_cuda_mpi src/cuda_mpi/nbody_cuda_mpi.cu
+mkdir -p bin
+gcc -O2 -o bin/nbody_seq src/sequential/nbody_sequential.c -lm
+gcc -O3 -fopenmp -o bin/nbody_omp src/openmp/nbody_openmp.c -lm
+mpicc -O2 -o bin/nbody_mpi src/mpi/nbody_mpi.c -lm
+nvcc -O2 -ccbin mpicxx -o bin/nbody_cuda_mpi src/cuda_mpi/nbody_cuda_mpi.cu
 ```
 
 If `nvcc -ccbin mpicxx` does not work on your system, try:
@@ -50,9 +51,10 @@ mpicxx -O2 -I/usr/local/cuda/include -L/usr/local/cuda/lib64 -lcudart \
 ### Windows (PowerShell / MinGW)
 
 ```powershell
-gcc -O2 -o nbody_seq.exe src/sequential/nbody_sequential.c -lm
-gcc -O2 -fopenmp -o nbody_omp.exe src/openmp/nbody_openmp.c -lm
-mpicc -O2 -o nbody_mpi.exe src/mpi/nbody_mpi.c -lm
+New-Item -ItemType Directory -Force bin | Out-Null
+gcc -O2 -o bin\nbody_seq.exe src/sequential/nbody_sequential.c -lm
+gcc -O2 -fopenmp -o bin\nbody_omp.exe src/openmp/nbody_openmp.c -lm
+mpicc -O2 -o bin\nbody_mpi.exe src/mpi/nbody_mpi.c -lm
 ```
 
 CUDA + MPI is recommended from WSL on Windows.

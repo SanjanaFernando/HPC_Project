@@ -51,9 +51,10 @@ done
 script_root="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$script_root"
 
+bin_dir="$script_root/bin"
 results_dir="$script_root/results"
 log_dir="$results_dir/logs"
-mkdir -p "$results_dir" "$log_dir"
+mkdir -p "$bin_dir" "$results_dir" "$log_dir"
 
 require_command() {
     local command_name="$1"
@@ -127,24 +128,24 @@ omp_bin="nbody_omp_bench"
 mpi_bin="nbody_mpi_bench"
 cuda_bin="nbody_cuda_mpi_bench"
 
-rm -f "$script_root/$seq_bin" "$script_root/$omp_bin" "$script_root/$mpi_bin" "$script_root/$cuda_bin" || true
+rm -f "$bin_dir/$seq_bin" "$bin_dir/$omp_bin" "$bin_dir/$mpi_bin" "$bin_dir/$cuda_bin" || true
 
 # Compile sequential
-compile_program gcc "$seq_bin" -O2 -o "$script_root/$seq_bin" src/sequential/nbody_sequential.c -lm
+compile_program gcc "$seq_bin" -O2 -o "$bin_dir/$seq_bin" src/sequential/nbody_sequential.c -lm
 
 # Compile OpenMP
-compile_program gcc "$omp_bin" -O2 -fopenmp -o "$script_root/$omp_bin" src/openmp/nbody_openmp.c -lm
+compile_program gcc "$omp_bin" -O2 -fopenmp -o "$bin_dir/$omp_bin" src/openmp/nbody_openmp.c -lm
 
 if [[ "$SKIP_MPI" -eq 0 ]]; then
     # Compile MPI (place output path explicitly to avoid filename collisions)
-    compile_program mpicc "$mpi_bin" -O2 -o "$script_root/$mpi_bin" src/mpi/nbody_mpi.c -lm
+    compile_program mpicc "$mpi_bin" -O2 -o "$bin_dir/$mpi_bin" src/mpi/nbody_mpi.c -lm
 fi
 
 cuda_available=0
 if [[ "$SKIP_CUDA" -eq 0 ]]; then
     if command -v nvcc >/dev/null 2>&1 && command -v mpicxx >/dev/null 2>&1; then
         cuda_available=1
-        compile_program nvcc "$cuda_bin" -O2 -ccbin mpicxx -o "$script_root/$cuda_bin" src/cuda_mpi/nbody_cuda_mpi.cu
+        compile_program nvcc "$cuda_bin" -O2 -ccbin mpicxx -o "$bin_dir/$cuda_bin" src/cuda_mpi/nbody_cuda_mpi.cu
     else
         echo "Skipping CUDA + MPI build: nvcc and/or mpicxx not found in PATH." >&2
     fi
@@ -161,9 +162,9 @@ printf 'Program,TotalSeconds,AverageSeconds,OutputExists,OutputBytes,OutputHash,
 : > "$summary_txt"
 
 printf 'Running sequential...\n'
-run_and_log "$seq_log" "$script_root/$seq_bin"
+run_and_log "$seq_log" "$bin_dir/$seq_bin"
 printf 'Running OpenMP with %s threads...\n' "$OPENMP_THREADS"
-OMP_NUM_THREADS="$OPENMP_THREADS" run_and_log "$omp_log" "$script_root/$omp_bin"
+OMP_NUM_THREADS="$OPENMP_THREADS" run_and_log "$omp_log" "$bin_dir/$omp_bin"
 
 seq_record="$(record_result 'Sequential' "$seq_log" "$results_dir/final_particles_sequential.txt")"
 omp_record="$(record_result 'OpenMP' "$omp_log" "$results_dir/final_particles_openmp.txt")"
@@ -172,14 +173,14 @@ printf '%s\n%s\n' "$seq_record" "$omp_record" >> "$summary_csv"
 if [[ "$SKIP_MPI" -eq 0 ]]; then
     printf 'Running MPI with %s processes...\n' "$MPI_PROCESSES"
     # Allow running as root inside some WSL/OpenMPI setups
-    run_and_log "$mpi_log" mpirun --allow-run-as-root -np "$MPI_PROCESSES" "$script_root/$mpi_bin"
+    run_and_log "$mpi_log" mpirun --allow-run-as-root -np "$MPI_PROCESSES" "$bin_dir/$mpi_bin"
     mpi_record="$(record_result 'MPI' "$mpi_log" "$results_dir/final_particles_mpi.txt")"
     printf '%s\n' "$mpi_record" >> "$summary_csv"
 fi
 
 if [[ "$cuda_available" -eq 1 ]]; then
     printf 'Running CUDA + MPI with %s processes...\n' "$MPI_PROCESSES"
-    run_and_log "$cuda_log" mpirun --allow-run-as-root -np "$MPI_PROCESSES" "$script_root/$cuda_bin"
+    run_and_log "$cuda_log" mpirun --allow-run-as-root -np "$MPI_PROCESSES" "$bin_dir/$cuda_bin"
     cuda_record="$(record_result 'CUDA_MPI' "$cuda_log" "$results_dir/final_particles_cuda_mpi.txt")"
     printf '%s\n' "$cuda_record" >> "$summary_csv"
 fi

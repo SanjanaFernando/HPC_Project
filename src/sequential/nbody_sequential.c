@@ -149,13 +149,7 @@ int main() {
     printf("Total simulation time: %.4f seconds\n", total_time);
     printf("Average time per step: %.6f seconds\n", total_time / STEPS);
 
-    // Quick checksum / summary so we can sanity-check across backends
-    double sum_x = 0.0, sum_v = 0.0;
-    for (int i = 0; i < N; i++) {
-        sum_x += particles[i].x + particles[i].y + particles[i].z;
-        sum_v += particles[i].vx + particles[i].vy + particles[i].vz;
-    }
-    printf("Checksum: sum(pos) = %.6e   sum(vel) = %.6e\n", sum_x, sum_v);
+
 
     // Save final state
     fp = fopen("results/final_particles_sequential.txt", "w");
